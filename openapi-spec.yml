@@ -1,0 +1,435 @@
+openapi: 3.0.3
+info:
+  title: VPC Management API
+  version: 1.0.0
+  description: |
+    A RESTful API for managing AWS VPCs and their associated subnets.
+    This API allows you to create VPCs, list VPCs, and retrieve individual VPC details.
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: https://api.example.com/dev
+    description: Development server
+  - url: https://api.example.com/prod
+    description: Production server
+
+tags:
+  - name: VPC
+    description: VPC management operations
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /vpcs:
+    get:
+      tags:
+        - VPC
+      summary: List all VPCs
+      description: Retrieves a paginated list of all VPCs managed by this API
+      operationId: listVPCs
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of VPCs to return (1-100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: last_key
+          in: query
+          description: Pagination token from previous response for fetching next page
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response with list of VPCs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListVPCResponse'
+              examples:
+                success:
+                  value:
+                    vpcs:
+                      - vpc_id: vpc-12345678
+                        created_at: "2025-12-07T10:00:00.000Z"
+                        created_by: "api-user"
+                        vpc_cidr: "10.0.0.0/16"
+                        vpc_name: "my-vpc"
+                        enable_dns_support: true
+                        enable_dns_hostnames: true
+                        status: "available"
+                        subnets:
+                          - subnet_id: subnet-11111111
+                            cidr_block: "10.0.1.0/24"
+                            availability_zone: "eu-west-1a"
+                            name: "public-subnet-1"
+                    count: 1
+                    has_more: false
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - VPC
+      summary: Create a new VPC
+      description: Creates a new VPC with specified CIDR block and subnets
+      operationId: createVPC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVPCRequest'
+            examples:
+              basic:
+                summary: Basic VPC with one subnet
+                value:
+                  cidr_block: "10.0.0.0/16"
+                  vpc_name: "my-vpc"
+                  subnets:
+                    - cidr_block: "10.0.1.0/24"
+                      name: "public-subnet-1"
+                      availability_zone: "eu-west-1a"
+              advanced:
+                summary: VPC with multiple subnets and custom DNS settings
+                value:
+                  cidr_block: "10.0.0.0/16"
+                  vpc_name: "production-vpc"
+                  enable_dns_support: true
+                  enable_dns_hostnames: true
+                  subnets:
+                    - cidr_block: "10.0.1.0/24"
+                      name: "public-subnet-1"
+                      availability_zone: "eu-west-1a"
+                    - cidr_block: "10.0.2.0/24"
+                      name: "private-subnet-1"
+                      availability_zone: "eu-west-1b"
+      responses:
+        '201':
+          description: VPC created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateVPCResponse'
+              example:
+                message: "VPC created successfully"
+                vpc_id: "vpc-12345678"
+                vpc_cidr: "10.0.0.0/16"
+                created_at: "2025-12-07T10:00:00.000Z"
+                created_by: "api-user"
+                subnets:
+                  - subnet_id: "subnet-11111111"
+                    cidr_block: "10.0.1.0/24"
+                    availability_zone: "eu-west-1a"
+                    name: "public-subnet-1"
+        '400':
+          description: Bad request - validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Validation failed"
+                message: "cidr_block is required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /vpcs/{vpc_id}:
+    get:
+      tags:
+        - VPC
+      summary: Get VPC by ID
+      description: Retrieves detailed information about a specific VPC
+      operationId: getVPC
+      parameters:
+        - name: vpc_id
+          in: path
+          description: The unique identifier of the VPC
+          required: true
+          schema:
+            type: string
+            pattern: '^vpc-[a-zA-Z0-9]+$'
+          example: vpc-12345678
+      responses:
+        '200':
+          description: VPC details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VPCResource'
+              example:
+                vpc_id: "vpc-12345678"
+                created_at: "2025-12-07T10:00:00.000Z"
+                created_by: "api-user"
+                vpc_cidr: "10.0.0.0/16"
+                vpc_name: "my-vpc"
+                enable_dns_support: true
+                enable_dns_hostnames: true
+                status: "available"
+                subnets:
+                  - subnet_id: "subnet-11111111"
+                    cidr_block: "10.0.1.0/24"
+                    availability_zone: "eu-west-1a"
+                    name: "public-subnet-1"
+        '404':
+          description: VPC not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "VPC not found"
+                message: "VPC with ID vpc-12345678 does not exist"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key for authentication
+
+  schemas:
+    VPCResource:
+      type: object
+      description: Complete VPC resource with all metadata
+      required:
+        - vpc_id
+        - created_at
+        - created_by
+        - vpc_cidr
+        - vpc_name
+        - enable_dns_support
+        - enable_dns_hostnames
+        - status
+        - subnets
+      properties:
+        vpc_id:
+          type: string
+          description: AWS VPC identifier
+          example: vpc-12345678
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of VPC creation
+          example: "2025-12-07T10:00:00.000Z"
+        created_by:
+          type: string
+          description: API key or user who created the VPC (truncated to 20 chars)
+          maxLength: 20
+          example: "api-user"
+        vpc_cidr:
+          type: string
+          description: CIDR block of the VPC
+          pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+          example: "10.0.0.0/16"
+        vpc_name:
+          type: string
+          description: Name tag of the VPC
+          example: "my-vpc"
+        enable_dns_support:
+          type: boolean
+          description: Whether DNS resolution is supported
+          example: true
+        enable_dns_hostnames:
+          type: boolean
+          description: Whether DNS hostnames are enabled
+          example: true
+        status:
+          type: string
+          description: Current status of the VPC
+          enum: [pending, available, deleting, deleted]
+          example: "available"
+        subnets:
+          type: array
+          description: List of subnets in this VPC
+          items:
+            $ref: '#/components/schemas/SubnetResult'
+
+    SubnetResult:
+      type: object
+      description: Subnet information
+      required:
+        - subnet_id
+        - cidr_block
+        - availability_zone
+        - name
+      properties:
+        subnet_id:
+          type: string
+          description: AWS Subnet identifier
+          example: subnet-11111111
+        cidr_block:
+          type: string
+          description: CIDR block of the subnet
+          pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+          example: "10.0.1.0/24"
+        availability_zone:
+          type: string
+          description: AWS availability zone
+          example: "eu-west-1a"
+        name:
+          type: string
+          description: Name tag of the subnet
+          example: "public-subnet-1"
+
+    CreateVPCRequest:
+      type: object
+      description: Request body for creating a new VPC
+      required:
+        - cidr_block
+        - vpc_name
+        - subnets
+      properties:
+        cidr_block:
+          type: string
+          description: CIDR block for the VPC (must be valid IPv4 CIDR)
+          pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+          example: "10.0.0.0/16"
+        vpc_name:
+          type: string
+          description: Name for the VPC
+          minLength: 1
+          maxLength: 255
+          example: "my-vpc"
+        subnets:
+          type: array
+          description: List of subnets to create in the VPC
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SubnetRequest'
+        enable_dns_support:
+          type: boolean
+          description: Enable DNS resolution (default true)
+          default: true
+          example: true
+        enable_dns_hostnames:
+          type: boolean
+          description: Enable DNS hostnames (default true)
+          default: true
+          example: true
+
+    SubnetRequest:
+      type: object
+      description: Subnet configuration for VPC creation
+      required:
+        - cidr_block
+        - name
+      properties:
+        cidr_block:
+          type: string
+          description: CIDR block for the subnet (must be within VPC CIDR)
+          pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+          example: "10.0.1.0/24"
+        name:
+          type: string
+          description: Name for the subnet
+          minLength: 1
+          maxLength: 255
+          example: "public-subnet-1"
+        availability_zone:
+          type: string
+          description: AWS availability zone (optional, AWS will choose if not specified)
+          example: "eu-west-1a"
+
+    CreateVPCResponse:
+      type: object
+      description: Response after successfully creating a VPC
+      required:
+        - message
+        - vpc_id
+        - vpc_cidr
+        - subnets
+        - created_at
+        - created_by
+      properties:
+        message:
+          type: string
+          description: Success message
+          example: "VPC created successfully"
+        vpc_id:
+          type: string
+          description: AWS VPC identifier of the created VPC
+          example: "vpc-12345678"
+        vpc_cidr:
+          type: string
+          description: CIDR block of the created VPC
+          example: "10.0.0.0/16"
+        subnets:
+          type: array
+          description: List of created subnets
+          items:
+            $ref: '#/components/schemas/SubnetResult'
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of creation
+          example: "2025-12-07T10:00:00.000Z"
+        created_by:
+          type: string
+          description: API key or user who created the VPC
+          maxLength: 20
+          example: "api-user"
+
+    ListVPCResponse:
+      type: object
+      description: Paginated list of VPCs
+      required:
+        - vpcs
+        - count
+        - has_more
+      properties:
+        vpcs:
+          type: array
+          description: Array of VPC resources
+          items:
+            $ref: '#/components/schemas/VPCResource'
+        count:
+          type: integer
+          description: Number of VPCs in this response
+          example: 10
+        last_key:
+          type: string
+          nullable: true
+          description: Pagination token for next page (null if no more pages)
+          example: "vpc-12345678"
+        has_more:
+          type: boolean
+          description: Whether there are more results available
+          example: false
+
+    ErrorResponse:
+      type: object
+      description: Error response structure
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error category or type
+          example: "Validation failed"
+        message:
+          type: string
+          description: Detailed error message
+          example: "cidr_block is required"

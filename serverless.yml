@@ -6,57 +6,116 @@ provider:
   name: aws
   runtime: provided.al2
   region: ${env:AWS_REGION}
-  logRetentionInDays: ${env:LOG_RETENTION_DAYS}
+  logRetentionInDays: ${env:LOG_RETENTION_DAYS, '7'}
   memorySize: 128
   stage: ${opt:stage, env:DEPLOYMENT_NAME}
-  role: DefaultRole
+ 
+  stackTags:
+    Project: DemoProject
+    Environment: ${self:provider.stage}
+  
+  deploymentBucket:
+    name: ${env:DEPLOYMENT_BUCKET_NAME}
+  
+  environment:
+    VPC_TABLE_NAME: ${self:service}-${self:provider.stage}-vpcs
+
   iam:
     role:
       statements:
         - Effect: "Allow"
           Action:
+            - "ec2:CreateVpc"
+            - "ec2:DeleteVpc"
             - "ec2:DescribeVpcs"
+            - "ec2:ModifyVpcAttribute"
+            - "ec2:CreateSubnet"
+            - "ec2:DeleteSubnet"
             - "ec2:DescribeSubnets"
+            - "ec2:DescribeAvailabilityZones"
+            - "ec2:CreateTags"
             - "ec2:DescribeSecurityGroups"
           Resource: "*"
+        
+        - Effect: "Allow"
+          Action:
+            - "dynamodb:PutItem"
+            - "dynamodb:GetItem"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:UpdateItem"
+            - "dynamodb:DeleteItem"
+          Resource:
+            - Fn::GetAtt: [VPCTable, Arn]
+        
         - Effect: "Allow"
           Action:
             - "logs:CreateLogGroup"
             - "logs:CreateLogStream"
             - "logs:PutLogEvents"
           Resource: "*"
+  
   apiGateway:
+    apiKeys:
+      - name: ${self:service}-${self:provider.stage}-api-key
+        description: API key for accessing the VPC Management API
     usagePlan:
       throttle:
         burstLimit: 500
         rateLimit: 1000
-    logs:
-      httpApi: true
-    stackTags:
-      Project: DemoProject
-    deploymentBucket: ${env:DEPLOYMENT_BUCKET_NAME}
 
 package:
   individually: true
   excludeDevDependencies: false
-  exclude:
-    - ./**
+  patterns:
+    - '!./**'
+    - 'bin/**'
 
 functions:
-  vpcList:
-    handler: bootstrap
-    package:
-      artifact: bin/vpc-list.zip
-    events:
-      - httpApi:
-          path: /vpcs
-          method: GET
-
+  
   vpcCreate:
     handler: bootstrap
     package:
-      artifact: bin/vpc-create.zip
+      artifact: bin/vpc/create/vpc-create.zip
     events:
-      - httpApi:
+      - http:
           path: /vpcs
           method: POST
+          private: true
+
+  vpcGet:
+    handler: bootstrap
+    package:
+      artifact: bin/vpc/get/vpc-get.zip
+    events:
+      - http:
+          path: /vpcs
+          method: GET
+          private: true
+      - http:
+          path: /vpcs/{vpc_id}
+          method: GET
+          private: true
+
+resources:
+  Resources:
+    VPCTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-vpcs
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: vpc_id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+        KeySchema:
+          - AttributeName: vpc_id
+            KeyType: HASH
+          - AttributeName: created_at
+            KeyType: RANGE
+        Tags:
+          - Key: Project
+            Value: DemoProject
+          - Key: Environment
+            Value: ${self:provider.stage}

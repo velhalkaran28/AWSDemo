@@ -2,16 +2,7 @@
 	deploy \
 	remove \
 	package \
-	clean \
-	check-env \
 	precondition-aws \
-
-check-env:
-	# PRECONDITION: Ensure to execute 'source env.local.sh' before!
-	@echo
-	ifndef DEPLOYMENT_NAME
-		$(error environment variable DEPLOYMENT_NAME is undefined)
-	endif
 
 precondition-aws:
 	# PRECONDITION: AWS credentials available
@@ -27,9 +18,20 @@ endif
 	aws sts get-caller-identity
 	@echo
 
-package: check-env
+package:
+	sh scripts/package.sh
 	@echo
 	# GENERATING CloudFormation from Serverless
 	serverless package
 	@echo
-	
+
+deploy: precondition-aws
+	# DEPLOYING to the cloud
+	serverless deploy --force --verbose
+	mkdir -p logs
+	serverless info --verbose > logs/${DEPLOYMENT_NAME}-service-information.txt
+	echo - See logs/${DEPLOYMENT_NAME}-service-information.txt
+
+remove:
+	# REMOVING cloud deployment
+	serverless remove

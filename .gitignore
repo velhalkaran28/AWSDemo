@@ -1,1 +1,6 @@
 env.local.secrets.sh
+.serverless
+.vscode/
+bin/
+bootstrap
+logs/
