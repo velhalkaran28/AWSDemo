@@ -1,0 +1,62 @@
+service: vpc-management-api
+
+frameworkVersion: ^3.34.0
+
+provider:
+  name: aws
+  runtime: provided.al2
+  region: ${env:AWS_REGION}
+  logRetentionInDays: ${env:LOG_RETENTION_DAYS}
+  memorySize: 128
+  stage: ${opt:stage, env:DEPLOYMENT_NAME}
+  role: DefaultRole
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "ec2:DescribeVpcs"
+            - "ec2:DescribeSubnets"
+            - "ec2:DescribeSecurityGroups"
+          Resource: "*"
+        - Effect: "Allow"
+          Action:
+            - "logs:CreateLogGroup"
+            - "logs:CreateLogStream"
+            - "logs:PutLogEvents"
+          Resource: "*"
+  apiGateway:
+    usagePlan:
+      throttle:
+        burstLimit: 500
+        rateLimit: 1000
+    logs:
+      httpApi: true
+    stackTags:
+      Project: DemoProject
+    deploymentBucket: ${env:DEPLOYMENT_BUCKET_NAME}
+
+package:
+  individually: true
+  excludeDevDependencies: false
+  exclude:
+    - ./**
+
+functions:
+  vpcList:
+    handler: bootstrap
+    package:
+      artifact: bin/vpc-list.zip
+    events:
+      - httpApi:
+          path: /vpcs
+          method: GET
+
+  vpcCreate:
+    handler: bootstrap
+    package:
+      artifact: bin/vpc-create.zip
+    events:
+      - httpApi:
+          path: /vpcs
+          method: POST
