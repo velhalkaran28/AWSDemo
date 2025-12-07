@@ -17,13 +17,10 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
-// Request structure
 type CreateVPCRequest struct {
-	CIDRBlock          string   `json:"cidr_block"`
-	VPCName            string   `json:"vpc_name"`
-	Subnets            []Subnet `json:"subnets"`
-	EnableDNSSupport   *bool    `json:"enable_dns_support,omitempty"`
-	EnableDNSHostnames *bool    `json:"enable_dns_hostnames,omitempty"`
+	CIDRBlock string   `json:"cidr_block"`
+	VPCName   string   `json:"vpc_name"`
+	Subnets   []Subnet `json:"subnets"`
 }
 
 type Subnet struct {
@@ -32,7 +29,6 @@ type Subnet struct {
 	AvailabilityZone string `json:"availability_zone,omitempty"`
 }
 
-// Response structure
 type CreateVPCResponse struct {
 	Message   string         `json:"message"`
 	VPCId     string         `json:"vpc_id"`
@@ -62,7 +58,6 @@ var (
 )
 
 func init() {
-	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		panic(fmt.Sprintf("unable to load SDK config: %v", err))
@@ -156,38 +151,10 @@ func createVPC(ctx context.Context, req CreateVPCRequest) (string, error) {
 
 	createVPCOutput, err := ec2Client.CreateVpc(ctx, createVPCInput)
 	if err != nil {
-		return "", fmt.Errorf("failed to create VPC: %w", err)
+		return "", fmt.Errorf("failed to create VPC: %v", err)
 	}
 
 	vpcId := aws.ToString(createVPCOutput.Vpc.VpcId)
-
-	enableDNSSupport := true
-	if req.EnableDNSSupport != nil {
-		enableDNSSupport = *req.EnableDNSSupport
-	}
-	if enableDNSSupport {
-		_, err = ec2Client.ModifyVpcAttribute(ctx, &ec2.ModifyVpcAttributeInput{
-			VpcId:            aws.String(vpcId),
-			EnableDnsSupport: &ec2types.AttributeBooleanValue{Value: aws.Bool(true)},
-		})
-		if err != nil {
-			return "", fmt.Errorf("failed to enable DNS support: %w", err)
-		}
-	}
-
-	enableDNSHostnames := true
-	if req.EnableDNSHostnames != nil {
-		enableDNSHostnames = *req.EnableDNSHostnames
-	}
-	if enableDNSHostnames {
-		_, err = ec2Client.ModifyVpcAttribute(ctx, &ec2.ModifyVpcAttributeInput{
-			VpcId:              aws.String(vpcId),
-			EnableDnsHostnames: &ec2types.AttributeBooleanValue{Value: aws.Bool(true)},
-		})
-		if err != nil {
-			return "", fmt.Errorf("failed to enable DNS hostnames: %w", err)
-		}
-	}
 
 	return vpcId, nil
 }
@@ -254,7 +221,6 @@ func createSubnets(ctx context.Context, vpcId string, subnets []Subnet) ([]Subne
 func storeVPCMetadata(ctx context.Context, vpcId string, req CreateVPCRequest, subnets []SubnetResult, createdAt, createdBy string) error {
 	subnetItems := make([]types.AttributeValue, 0, len(subnets))
 	for _, subnet := range subnets {
-		// Wrap each map in AttributeValueMemberM
 		subnetItems = append(subnetItems, &types.AttributeValueMemberM{
 			Value: map[string]types.AttributeValue{
 				"subnet_id":         &types.AttributeValueMemberS{Value: subnet.SubnetId},
@@ -265,25 +231,14 @@ func storeVPCMetadata(ctx context.Context, vpcId string, req CreateVPCRequest, s
 		})
 	}
 
-	enableDNSSupport := true
-	if req.EnableDNSSupport != nil {
-		enableDNSSupport = *req.EnableDNSSupport
-	}
-	enableDNSHostnames := true
-	if req.EnableDNSHostnames != nil {
-		enableDNSHostnames = *req.EnableDNSHostnames
-	}
-
 	item := map[string]types.AttributeValue{
-		"vpc_id":               &types.AttributeValueMemberS{Value: vpcId},
-		"created_at":           &types.AttributeValueMemberS{Value: createdAt},
-		"created_by":           &types.AttributeValueMemberS{Value: createdBy},
-		"vpc_cidr":             &types.AttributeValueMemberS{Value: req.CIDRBlock},
-		"vpc_name":             &types.AttributeValueMemberS{Value: req.VPCName},
-		"enable_dns_support":   &types.AttributeValueMemberBOOL{Value: enableDNSSupport},
-		"enable_dns_hostnames": &types.AttributeValueMemberBOOL{Value: enableDNSHostnames},
-		"status":               &types.AttributeValueMemberS{Value: "created"},
-		"subnets":              &types.AttributeValueMemberL{Value: subnetItems},
+		"vpc_id":     &types.AttributeValueMemberS{Value: vpcId},
+		"created_at": &types.AttributeValueMemberS{Value: createdAt},
+		"created_by": &types.AttributeValueMemberS{Value: createdBy},
+		"vpc_cidr":   &types.AttributeValueMemberS{Value: req.CIDRBlock},
+		"vpc_name":   &types.AttributeValueMemberS{Value: req.VPCName},
+		"status":     &types.AttributeValueMemberS{Value: "created"},
+		"subnets":    &types.AttributeValueMemberL{Value: subnetItems},
 	}
 
 	_, err := dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{

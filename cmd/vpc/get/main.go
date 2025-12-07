@@ -16,15 +16,13 @@ import (
 )
 
 type VPCResource struct {
-	VPCId              string         `json:"vpc_id" dynamodbav:"vpc_id"`
-	CreatedAt          string         `json:"created_at" dynamodbav:"created_at"`
-	CreatedBy          string         `json:"created_by" dynamodbav:"created_by"`
-	VPCCidr            string         `json:"vpc_cidr" dynamodbav:"vpc_cidr"`
-	VPCName            string         `json:"vpc_name" dynamodbav:"vpc_name"`
-	EnableDNSSupport   bool           `json:"enable_dns_support" dynamodbav:"enable_dns_support"`
-	EnableDNSHostnames bool           `json:"enable_dns_hostnames" dynamodbav:"enable_dns_hostnames"`
-	Status             string         `json:"status" dynamodbav:"status"`
-	Subnets            []SubnetResult `json:"subnets" dynamodbav:"subnets"`
+	VPCId     string         `json:"vpc_id" dynamodbav:"vpc_id"`
+	CreatedAt string         `json:"created_at" dynamodbav:"created_at"`
+	CreatedBy string         `json:"created_by" dynamodbav:"created_by"`
+	VPCCidr   string         `json:"vpc_cidr" dynamodbav:"vpc_cidr"`
+	VPCName   string         `json:"vpc_name" dynamodbav:"vpc_name"`
+	Status    string         `json:"status" dynamodbav:"status"`
+	Subnets   []SubnetResult `json:"subnets" dynamodbav:"subnets"`
 }
 
 type SubnetResult struct {
@@ -35,10 +33,8 @@ type SubnetResult struct {
 }
 
 type ListVPCResponse struct {
-	VPCs    []VPCResource `json:"vpcs"`
-	Count   int           `json:"count"`
-	LastKey *string       `json:"last_key,omitempty"`
-	HasMore bool          `json:"has_more"`
+	VPCs  []VPCResource `json:"vpcs"`
+	Count int           `json:"count"`
 }
 
 type ErrorResponse struct {
@@ -101,24 +97,8 @@ func getVPC(ctx context.Context, vpcId string) (events.APIGatewayProxyResponse, 
 }
 
 func listVPCs(ctx context.Context, queryParams map[string]string) (events.APIGatewayProxyResponse, error) {
-	limit := int32(10)
-	if limitStr, ok := queryParams["limit"]; ok {
-		var parsedLimit int32
-		_, err := fmt.Sscanf(limitStr, "%d", &parsedLimit)
-		if err == nil && parsedLimit > 0 && parsedLimit <= 100 {
-			limit = parsedLimit
-		}
-	}
-
 	scanInput := &dynamodb.ScanInput{
 		TableName: aws.String(vpcTableName),
-		Limit:     aws.Int32(limit),
-	}
-
-	if lastKey, ok := queryParams["last_key"]; ok && lastKey != "" {
-		scanInput.ExclusiveStartKey = map[string]types.AttributeValue{
-			"vpc_id": &types.AttributeValueMemberS{Value: lastKey},
-		}
 	}
 
 	result, err := dynamoClient.Scan(ctx, scanInput)
@@ -136,21 +116,10 @@ func listVPCs(ctx context.Context, queryParams map[string]string) (events.APIGat
 		vpcs = append(vpcs, vpc)
 	}
 
-	response := ListVPCResponse{
-		VPCs:    vpcs,
-		Count:   len(vpcs),
-		HasMore: result.LastEvaluatedKey != nil,
-	}
-
-	if result.LastEvaluatedKey != nil {
-		if vpcIdAttr, ok := result.LastEvaluatedKey["vpc_id"]; ok {
-			if vpcIdMember, ok := vpcIdAttr.(*types.AttributeValueMemberS); ok {
-				response.LastKey = &vpcIdMember.Value
-			}
-		}
-	}
-
-	return successResponse(200, response)
+	return successResponse(200, ListVPCResponse{
+		VPCs:  vpcs,
+		Count: len(vpcs),
+	})
 }
 
 func successResponse(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
